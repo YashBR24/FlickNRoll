@@ -1,0 +1,37 @@
+/* Container for the rotating pickleball */
+.pickleball-container {
+    position: absolute;
+    top: 55%; /* Adjust position as needed */
+    left: -10%; /* Align ball to the left corner */
+    z-index: 5;
+    pointer-events: none; /* Prevent interaction with the ball */
+  }
+  
+  /* Pickleball image */
+  .pickleball {
+    width: 500px; /* Adjust ball size */
+    height: 500px;
+    animation: rotatePickleball 20s linear infinite; /* Rotate animation */
+  }
+  
+  /* Rotate animation for the ball */
+  @keyframes rotatePickleball {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+  
+  
+  
+  .logo {
+    width: 300px;
+    height: 300px;
+    display: block;
+    margin: 0 auto;
+    border-radius: 50%;
+
+  }
+  

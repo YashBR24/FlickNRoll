@@ -1,0 +1,205 @@
+/* @tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@keyframes float3d {
+    0%, 100% {
+      transform: translate(-50%, -50%) rotate(0deg) translateZ(0);
+    }
+    50% {
+      transform: translate(-50%, -45%) rotate(360deg) translateZ(20px);
+    }
+  }
+  
+  @keyframes spin-slow {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+  
+  .animate-3d-ball {
+    animation: float3d 8s ease-in-out infinite;
+  }
+  
+  .animate-spin-slow {
+    animation: spin-slow linear infinite;
+  }
+  
+
+
+   */
+
+
+   @tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom Scrollbar */
+.scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+.scrollbar-thumb-gray-300::-webkit-scrollbar-thumb {
+  background-color: #D1D5DB;
+  border-radius: 6px;
+}
+
+.scrollbar-track-gray-100::-webkit-scrollbar-track {
+  background-color: #F3F4F6;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+}
+
+/* Gradient Backgrounds */
+.bg-gradient-admin {
+  background: linear-gradient(135deg, #f6f7ff 0%, #f0f3ff 100%);
+}
+
+/* Card Hover Effects */
+.hover-card-shadow {
+  transition: all 0.3s ease;
+}
+
+.hover-card-shadow:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+}
+
+/* Animated Icons */
+.icon-spin {
+  animation: spin 20s linear infinite;
+}
+
+.icon-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: .7;
+  }
+}
+
+/* Chart Tooltips */
+.recharts-tooltip-wrapper {
+  outline: none;
+}
+
+.recharts-default-tooltip {
+  background-color: rgba(31, 41, 55, 0.95) !important;
+  border: none !important;
+  border-radius: 8px !important;
+  padding: 12px !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+}
+
+.recharts-tooltip-label {
+  color: #F3F4F6 !important;
+  font-weight: 500 !important;
+  margin-bottom: 4px !important;
+}
+
+.recharts-tooltip-item {
+  color: #D1D5DB !important;
+  padding: 2px 0 !important;
+}
+
+/* Modal Animations */
+.modal-backdrop {
+  backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  transform-origin: center center;
+}
+
+/* Status Indicators */
+.status-dot {
+  position: relative;
+}
+
+.status-dot::before {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: currentColor;
+  left: -16px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.status-dot.active::before {
+  background-color: #10B981;
+}
+
+.status-dot.inactive::before {
+  background-color: #EF4444;
+}
+
+/* Custom Calendar Styles */
+.react-calendar {
+  width: 100% !important;
+  border: none !important;
+  background-color: transparent !important;
+  font-family: inherit !important;
+}
+
+.react-calendar__tile {
+  padding: 1em 0.5em !important;
+  position: relative !important;
+  font-size: 0.875rem !important;
+}
+
+.react-calendar__tile--now {
+  background-color: #f3f4f6 !important;
+}
+
+.react-calendar__tile--active {
+  background-color: #3b82f6 !important;
+  color: white !important;
+}
+
+.react-calendar__tile.has-bookings {
+  background-color: #f0f9ff !important;
+  font-weight: bold !important;
+}
+
+.react-calendar__tile:enabled:hover,
+.react-calendar__tile:enabled:focus {
+  background-color: #dbeafe !important;
+}
+
+.react-calendar__navigation button {
+  font-size: 1rem !important;
+  color: #4b5563 !important;
+}
+
+.react-calendar__navigation button:enabled:hover,
+.react-calendar__navigation button:enabled:focus {
+  background-color: #f3f4f6 !important;
+}
+
+.react-calendar__month-view__weekdays {
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  color: #6b7280 !important;
+}
