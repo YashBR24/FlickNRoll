@@ -15,9 +15,22 @@ const userSchema = mongoose.Schema(
             type: String,
             required: [true, 'Please add a password'],
         },
+        phoneNumber: {
+            type: String,
+            required: [true, 'Please add a phone number'],
+        },
+        gender: {
+            type: String,
+            enum: ['male', 'female', 'other'],
+            required: true,
+        },
+        dateOfBirth: {
+            type: Date,
+            required: true,
+        },
         role: {
             type: String,
-            enum: ['user', 'admin', 'manager','member'],
+            enum: ['user', 'admin', 'manager', 'member'],
             default: 'user',
         },
         isVerified: {

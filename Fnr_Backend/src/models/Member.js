@@ -41,9 +41,18 @@ const memberSchema = mongoose.Schema(
             type: Number,
             default: 0,
         },
-        phone: {
+        phoneNumber: {
             type: String,
-            required: [false],
+            required: [true, 'Please add a phone number'],
+        },
+        gender: {
+            type: String,
+            enum: ['male', 'female', 'other'],
+            required: true,
+        },
+        dateOfBirth: {
+            type: Date,
+            required: true,
         },
         address: {
             type: String,

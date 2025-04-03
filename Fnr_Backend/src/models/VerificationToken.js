@@ -15,6 +15,16 @@ const verificationTokenSchema = new mongoose.Schema({
   name: {
     type: String
   },
+  phoneNumber: {
+    type: String
+  },
+  gender: {
+    type: String,
+    enum: ['male', 'female', 'other']
+  },
+  dateOfBirth: {
+    type: Date
+  },
   role: {
     type: String,
     enum: ['user', 'admin', 'manager'],
@@ -23,7 +33,7 @@ const verificationTokenSchema = new mongoose.Schema({
   createdAt: {
     type: Date,
     default: Date.now,
-    expires: 7200 // Token expires after 2 hour
+    expires: 7200 // Token expires after 2 hours
   }
 });
 

@@ -5,7 +5,7 @@ const asyncHandler = require('express-async-handler');
 const User = require('../models/User');
 const LoginAttempt = require('../models/LoginAttempt');
 const VerificationToken = require('../models/VerificationToken');
-const { saveLogToDB } = require('../middleware/logger');
+const { log } = require('../middleware/logger'); // Updated import
 const { sendEmail } = require('../config/emailConfig');
 
 // Generate JWT Token
@@ -53,93 +53,99 @@ const resetLoginAttempts = async (email, ipAddress) => {
 };
 
 // Register User
-const registerUser = asyncHandler(async (req, res) => {
+const registerUser = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
-    const ipAddress = req.ip;
+    const { name, email, password, confirmPassword, phoneNumber, gender, dateOfBirth, role } = req.body;
 
-    if (!name || !email || !password) {
-      await saveLogToDB('warn', 'Registration attempt with missing fields', req.method, req.originalUrl, 400);
-      res.status(400);
-      throw new Error('Please add all fields');
+    if (!name || !email || !password || !confirmPassword || !phoneNumber || !gender || !dateOfBirth) {
+      return res.status(400).json({ message: 'All fields are required' });
     }
 
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-    if (!passwordRegex.test(password)) {
-      await saveLogToDB('warn', 'Weak password attempt during registration', req.method, req.originalUrl, 400);
-      res.status(400);
-      throw new Error('Password must be at least 8 characters long and contain uppercase, lowercase, number and special character');
+    if (password !== confirmPassword) {
+      return res.status(400).json({ message: 'Passwords do not match' });
     }
 
-    const userExists = await User.findOne({ email });
-    if (userExists) {
-      await saveLogToDB('warn', `Registration attempt with existing email: ${email}`, req.method, req.originalUrl, 400);
-      res.status(400);
-      throw new Error('User already exists');
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: 'User already exists' });
     }
 
-    const verificationToken = crypto.randomBytes(32).toString('hex');
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    await VerificationToken.create({
+    const user = new User({
+      name,
       email,
-      token: verificationToken,
+      password: hashedPassword,
+      phoneNumber,
+      gender,
+      dateOfBirth,
+      role,
+      isVerified: false, // Ensure user is unverified until email confirmation
+    });
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const verificationToken = new VerificationToken({
+      email,
+      token,
       password: hashedPassword,
       name,
-      role: 'user',
+      role,
+      phoneNumber,
+      gender,
+      dateOfBirth,
     });
 
-    const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
+    await verificationToken.save();
+    await user.save();
+
+    // Construct verification email
+    const verificationLink = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
     const emailContent = `
       <h1>Email Verification</h1>
-      <p>Hello ${name},</p>
-      <p>Thank you for registering. Please click the link below to verify your email address:</p>
-      <p><a href="${verificationUrl}" style="padding: 10px 15px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 4px;">Verify Email</a></p>
+      <p>Thank you for registering! Please click the link below to verify your email:</p>
+      <p><a href="${verificationLink}" style="padding: 10px 15px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 4px;">Verify Email</a></p>
       <p>This link will expire in 24 hours.</p>
-      <p>If you didn't register for an account, please ignore this email.</p>
     `;
 
-    const emailSent = await sendEmail(email, 'Email Verification', emailContent);
-
+    const emailSent = await sendEmail(email, 'Verify Your Email', emailContent);
     if (!emailSent) {
-      await saveLogToDB('error', `Failed to send verification email to: ${email}`, req.method, req.originalUrl, 500);
-      res.status(500);
-      throw new Error('Failed to send verification email');
+      return res.status(500).json({ message: 'User registered, but email could not be sent' });
     }
 
-    await saveLogToDB('info', `Registration initiated for: ${email}`, req.method, req.originalUrl, 200);
-    res.status(200).json({
-      message: 'Registration successful. Please check your email to verify your account.',
-      email,
+    res.status(201).json({
+      message: 'User registered successfully. Please verify your email.',
     });
+
   } catch (error) {
-    await saveLogToDB('error', `Registration error: ${error.message}`, req.method, req.originalUrl, 500);
-    throw error;
+    res.status(500).json({ message: 'Server error', error: error.message });
+    console.log(error);
   }
-});
+};
 
 // Verify Email
 const verifyEmail = asyncHandler(async (req, res) => {
   try {
+    log('VERIFYING_EMAIL');
+
     const { token } = req.query;
 
     if (!token) {
-      await saveLogToDB('warn', 'Email verification attempt without token', req.method, req.originalUrl, 400);
+      log('MISSING_TOKEN_EMAIL_VERIFICATION');
       return res.status(400).json({ success: false, message: 'Verification token is required' });
     }
 
     const verificationRecord = await VerificationToken.findOne({ token });
 
     if (!verificationRecord) {
-      await saveLogToDB('warn', 'Invalid or expired verification token', req.method, req.originalUrl, 400);
+      log('INVALID_OR_EXPIRED_TOKEN');
       return res.status(400).json({ success: false, message: 'Invalid or expired verification link' });
     }
 
     const existingUser = await User.findOne({ email: verificationRecord.email });
 
     if (existingUser && existingUser.isVerified) {
-      await saveLogToDB('info', `User already verified: ${verificationRecord.email}`, req.method, req.originalUrl, 200);
+      log(`USER_ALREADY_VERIFIED_${verificationRecord.email}`);
       return res.status(200).json({
         success: true,
         message: 'Email already verified. Please set your password or log in.',
@@ -151,11 +157,14 @@ const verifyEmail = asyncHandler(async (req, res) => {
       existingUser.isVerified = true;
       existingUser.name = verificationRecord.name;
       existingUser.password = verificationRecord.password;
+      existingUser.dateOfBirth = verificationRecord.dateOfBirth;
+      existingUser.gender = verificationRecord.gender;
+      existingUser.phoneNumber = verificationRecord.phoneNumber;
       await existingUser.save();
 
       await VerificationToken.deleteOne({ token });
 
-      await saveLogToDB('info', `Email verified for existing user: ${verificationRecord.email}`, req.method, req.originalUrl, 200);
+      log(`EMAIL_VERIFIED_EXISTING_USER_${verificationRecord.email}`);
       return res.status(200).json({
         success: true,
         message: 'Email verified successfully.',
@@ -167,6 +176,9 @@ const verifyEmail = asyncHandler(async (req, res) => {
       name: verificationRecord.name,
       email: verificationRecord.email,
       password: verificationRecord.password,
+      dateOfBirth: verificationRecord.dateOfBirth,
+      phoneNumber: verificationRecord.phoneNumber,
+      gender: verificationRecord.gender,
       role: verificationRecord.role,
       isVerified: true,
       registrationIP: req.ip,
@@ -174,14 +186,14 @@ const verifyEmail = asyncHandler(async (req, res) => {
 
     await VerificationToken.deleteOne({ token });
 
-    await saveLogToDB('info', `Email verified successfully for: ${verificationRecord.email}`, req.method, req.originalUrl, 200);
+    log(`EMAIL_VERIFIED_${verificationRecord.email}`);
     res.status(200).json({
       success: true,
       message: 'Email verified successfully.',
       email: verificationRecord.email,
     });
   } catch (error) {
-    await saveLogToDB('error', `Email verification error: ${error.message}`, req.method, req.originalUrl, 500);
+    log(`ERROR_VERIFYING_EMAIL_${error.message}`);
     res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -189,6 +201,8 @@ const verifyEmail = asyncHandler(async (req, res) => {
 // Login User
 const loginUser = asyncHandler(async (req, res) => {
   try {
+    log('LOGGING_IN_USER');
+
     const { email, password } = req.body;
     const ipAddress = req.ip;
 
@@ -197,13 +211,13 @@ const loginUser = asyncHandler(async (req, res) => {
     const user = await User.findOne({ email });
 
     if (!user) {
-      await saveLogToDB('warn', `Failed login attempt for non-existent user: ${email}`, req.method, req.originalUrl, 400);
+      log(`LOGIN_ATTEMPT_NON_EXISTENT_USER_${email}`);
       res.status(400);
       throw new Error('Invalid credentials');
     }
 
     if (!user.isVerified) {
-      await saveLogToDB('warn', `Login attempt for unverified account: ${email}`, req.method, req.originalUrl, 400);
+      log(`LOGIN_ATTEMPT_UNVERIFIED_ACCOUNT_${email}`);
       res.status(400);
       throw new Error('Please verify your email before logging in');
     }
@@ -214,7 +228,7 @@ const loginUser = asyncHandler(async (req, res) => {
       user.lastLogin = new Date();
       await user.save();
 
-      await saveLogToDB('info', `User logged in successfully: ${email}`, req.method, req.originalUrl, 200);
+      log(`USER_LOGGED_IN_${email}`);
       res.json({
         _id: user.id,
         name: user.name,
@@ -223,30 +237,32 @@ const loginUser = asyncHandler(async (req, res) => {
         token: generateToken(user._id),
       });
     } else {
-      await saveLogToDB('warn', `Failed login attempt for: ${email}`, req.method, req.originalUrl, 400);
+      log(`FAILED_LOGIN_ATTEMPT_${email}`);
       res.status(400);
       throw new Error('Invalid credentials');
     }
   } catch (error) {
-    await saveLogToDB('error', `Login error: ${error.message}`, req.method, req.originalUrl, 500);
+    log(`ERROR_LOGGING_IN_${error.message}`);
     throw error;
   }
 });
 
-// Request Password Reset (formerly resetPassword, renamed for clarity)
+// Request Password Reset
 const requestPasswordReset = asyncHandler(async (req, res) => {
   try {
+    log('REQUESTING_PASSWORD_RESET');
+
     const { email } = req.body;
 
     if (!email) {
-      await saveLogToDB('warn', 'Password reset request attempt without email', req.method, req.originalUrl, 400);
+      log('MISSING_EMAIL_PASSWORD_RESET');
       res.status(400);
       throw new Error('Please provide an email address');
     }
 
     const user = await User.findOne({ email });
     if (!user) {
-      await saveLogToDB('warn', `Password reset request for non-existent email: ${email}`, req.method, req.originalUrl, 404);
+      log(`PASSWORD_RESET_NON_EXISTENT_EMAIL_${email}`);
       res.status(404);
       throw new Error('User not found');
     }
@@ -270,50 +286,51 @@ const requestPasswordReset = asyncHandler(async (req, res) => {
     const emailSent = await sendEmail(email, 'Password Reset Request', emailContent);
 
     if (!emailSent) {
-      await saveLogToDB('error', `Failed to send password reset email to: ${email}`, req.method, req.originalUrl, 500);
+      log(`FAILED_TO_SEND_RESET_EMAIL_${email}`);
       res.status(500);
       throw new Error('Failed to send password reset email');
     }
 
-    await saveLogToDB('info', `Password reset initiated for: ${email}`, req.method, req.originalUrl, 200);
+    log(`PASSWORD_RESET_INITIATED_${email}`);
     res.status(200).json({
       message: 'Password reset link sent to your email',
       email,
     });
   } catch (error) {
-    await saveLogToDB('error', `Password reset request error: ${error.message}`, req.method, req.originalUrl, 500);
+    log(`ERROR_REQUESTING_PASSWORD_RESET_${error.message}`);
     throw error;
   }
 });
 
-// Reset Password (formerly requestPasswordReset, renamed for clarity)
-// Reset Password (Updated to use email instead of token)
+// Reset Password
 const resetPassword = asyncHandler(async (req, res) => {
   try {
+    log('RESETTING_PASSWORD');
+
     const { email, newPassword, confirmPassword } = req.body;
 
     if (!email || !newPassword || !confirmPassword) {
-      await saveLogToDB('warn', 'Password reset attempt with missing fields', req.method, req.originalUrl, 400);
+      log('MISSING_FIELDS_PASSWORD_RESET');
       res.status(400);
       throw new Error('Please provide email, new password, and confirm password');
     }
 
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
     if (!passwordRegex.test(newPassword)) {
-      await saveLogToDB('warn', 'Weak password attempt during reset', req.method, req.originalUrl, 400);
+      log('WEAK_PASSWORD_RESET_ATTEMPT');
       res.status(400);
       throw new Error('Password must be at least 8 characters long and contain uppercase, lowercase, number, and special character');
     }
 
     if (newPassword !== confirmPassword) {
-      await saveLogToDB('warn', 'Password reset attempt with mismatched passwords', req.method, req.originalUrl, 400);
+      log('MISMATCHED_PASSWORDS_RESET');
       res.status(400);
       throw new Error('Passwords do not match');
     }
 
     const user = await User.findOne({ email });
     if (!user) {
-      await saveLogToDB('warn', `User not found for reset: ${email}`, req.method, req.originalUrl, 404);
+      log(`USER_NOT_FOUND_RESET_${email}`);
       res.status(404);
       throw new Error('User not found');
     }
@@ -324,13 +341,13 @@ const resetPassword = asyncHandler(async (req, res) => {
 
     await resetLoginAttempts(email, req.ip);
 
-    await saveLogToDB('info', `Password reset successful for: ${email}`, req.method, req.originalUrl, 200);
+    log(`PASSWORD_RESET_SUCCESSFUL_${email}`);
     res.status(200).json({
       message: 'Password reset successful',
       email,
     });
   } catch (error) {
-    await saveLogToDB('error', `Password reset error: ${error.message}`, req.method, req.originalUrl, 500);
+    log(`ERROR_RESETTING_PASSWORD_${error.message}`);
     res.status(500).json({ message: error.message });
   }
 });
@@ -338,43 +355,45 @@ const resetPassword = asyncHandler(async (req, res) => {
 // Set Password
 const setPassword = asyncHandler(async (req, res) => {
   try {
+    log('SETTING_PASSWORD');
+
     const { email, password, confirmPassword } = req.body;
 
     if (!email || !password || !confirmPassword) {
-      await saveLogToDB('warn', 'Password set attempt with missing fields', req.method, req.originalUrl, 400);
+      log('MISSING_FIELDS_SET_PASSWORD');
       res.status(400);
       throw new Error('Please provide email, password, and confirm password');
     }
 
     if (password !== confirmPassword) {
-      await saveLogToDB('warn', 'Password mismatch during set attempt', req.method, req.originalUrl, 400);
+      log('MISMATCHED_PASSWORDS_SET');
       res.status(400);
       throw new Error('Passwords do not match');
     }
 
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
     if (!passwordRegex.test(password)) {
-      await saveLogToDB('warn', 'Weak password during set attempt', req.method, req.originalUrl, 400);
+      log('WEAK_PASSWORD_SET_ATTEMPT');
       res.status(400);
       throw new Error('Password must be at least 8 characters long and contain uppercase, lowercase, number, and special character');
     }
 
     const user = await User.findOne({ email, isVerified: true });
     if (!user) {
-      await saveLogToDB('warn', 'User not found or not verified for password set', req.method, req.originalUrl, 400);
+      log(`USER_NOT_FOUND_OR_UNVERIFIED_${email}`);
       res.status(400);
       throw new Error('User not found or not verified');
     }
 
     const verificationRecord = await VerificationToken.findOne({ email });
     if (!verificationRecord) {
-      await saveLogToDB('warn', 'No valid verification token found for password set', req.method, req.originalUrl, 400);
+      log(`NO_VALID_TOKEN_SET_PASSWORD_${email}`);
       res.status(400);
       throw new Error('No valid verification token found. Please request a new password set link.');
     }
 
     if (!verificationRecord.name || !verificationRecord.password) {
-      await saveLogToDB('error', 'Verification token is malformed: missing required fields', req.method, req.originalUrl, 500);
+      log('MALFORMED_VERIFICATION_TOKEN');
       res.status(500);
       throw new Error('Verification token is malformed. Please contact support.');
     }
@@ -387,7 +406,7 @@ const setPassword = asyncHandler(async (req, res) => {
 
     const token = generateToken(user._id);
 
-    await saveLogToDB('info', `Password set successfully for: ${email}`, req.method, req.originalUrl, 200);
+    log(`PASSWORD_SET_SUCCESSFUL_${email}`);
     res.status(200).json({
       message: 'Password set successfully',
       token,
@@ -399,7 +418,7 @@ const setPassword = asyncHandler(async (req, res) => {
       },
     });
   } catch (error) {
-    await saveLogToDB('error', `Password set error: ${error.message}`, req.method, req.originalUrl, 500);
+    log(`ERROR_SETTING_PASSWORD_${error.message}`);
     res.status(500).json({ message: error.message });
   }
 });
@@ -407,28 +426,30 @@ const setPassword = asyncHandler(async (req, res) => {
 // Check Verification Token Validity
 const checkVerificationToken = asyncHandler(async (req, res) => {
   try {
+    log('CHECKING_VERIFICATION_TOKEN');
+
     const { token } = req.params;
 
     if (!token) {
-      await saveLogToDB('warn', 'Token check attempt without token', req.method, req.originalUrl, 400);
+      log('MISSING_TOKEN_CHECK');
       return res.status(400).json({ valid: false, message: 'Token is required' });
     }
 
     const verificationRecord = await VerificationToken.findOne({ token });
 
     if (!verificationRecord) {
-      await saveLogToDB('warn', 'Invalid or expired token check', req.method, req.originalUrl, 400);
+      log('INVALID_OR_EXPIRED_TOKEN_CHECK');
       return res.status(400).json({ valid: false, message: 'Invalid or expired token' });
     }
 
-    await saveLogToDB('info', `Valid token check for: ${verificationRecord.email}`, req.method, req.originalUrl, 200);
+    log(`VALID_TOKEN_CHECK_${verificationRecord.email}`);
     res.status(200).json({
       valid: true,
       email: verificationRecord.email,
       message: 'Token is valid',
     });
   } catch (error) {
-    await saveLogToDB('error', `Token check error: ${error.message}`, req.method, req.originalUrl, 500);
+    log(`ERROR_CHECKING_TOKEN_${error.message}`);
     res.status(500).json({ valid: false, message: 'Server error' });
   }
 });

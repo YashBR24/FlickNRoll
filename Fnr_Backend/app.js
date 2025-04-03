@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
-const { errorHandler } = require('./src/middleware/errorHandler');
-const requestLogger = require('./src/middleware/requestLogger');
+// const { errorHandler } = require('./src/middleware/errorHandler');
+// const requestLogger = require('./src/middleware/requestLogger');
 const userRoutes = require('./src/routes/user');
 
 const app = express();
@@ -14,7 +14,7 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 app.use(express.json());
-app.use(requestLogger);
+// app.use(requestLogger);
 app.use(express.urlencoded({ extended: false }));
 app.use('/api/users', userRoutes);
 
@@ -33,6 +33,6 @@ app.use('/api/member-dashboard', require('./src/routes/memberDashboard'));
 app.use('/api/memberships', require('./src/routes/memberships'));
 
 // Error handler
-app.use(errorHandler);
+// app.use(errorHandler);
 
 module.exports = app;

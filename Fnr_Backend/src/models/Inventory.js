@@ -38,16 +38,7 @@ const inventorySchema = mongoose.Schema(
         notes: {
             type: String,
         },
-        // price: {
-        //     type: Number,
-        //     required: [true, 'Please add price'],
-        //     min: [0, 'Price cannot be negative'],
-        // },
-        // paymentMethod: {
-        //     type: String,
-        //     required: [true, 'Please add payment method'],
-        //     enum: ['Cash', 'UPI', 'Card', 'other'],
-        // },
+
     },
     {
         timestamps: true,
